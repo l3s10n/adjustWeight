@@ -14,7 +14,7 @@ public class AdjustWeight{
     private Map<String, Integer> PT2Count = new HashMap<>();
 	private ArrayList<String> FPs = new ArrayList<String>();
     private ArrayList<String> TPs = new ArrayList<String>();
-	private double threshold;
+	private double threshold = 5;
 	
 	public AdjustWeight(String stage_location, String FP_location, String TP_location) {
 		this.stage_location = stage_location;
@@ -110,12 +110,21 @@ public class AdjustWeight{
 
 	public void adjust() {
 		prepareInfo();
+
+		double sumScore = 0.0;
+		for(Map.Entry<String, Double> m : judgeMode2Score.entrySet()) {
+			String point = m.getKey();
+			sumScore += Math.abs(TPJudgeMode2Percent.getOrDefault(point, 0.0) - FPJudgeMode2Percent.getOrDefault(point, 0.0));
+		}
+		System.out.println("sumScore:" + sumScore);
+
+		double delta = sumScore * threshold;
 		
 		for(Map.Entry<String, Double> m : judgeMode2Score.entrySet()) {
 			String point = m.getKey();
 			double score = m.getValue();
 			double newScore = score +  (TPJudgeMode2Percent.getOrDefault(point, 0.0) -
-					FPJudgeMode2Percent.getOrDefault(point, 0.0)) * score * 2.5;
+					FPJudgeMode2Percent.getOrDefault(point, 0.0)) * score * delta;
 			judgeMode2Score.put(point, newScore);
 		}
 
@@ -123,6 +132,22 @@ public class AdjustWeight{
 			if(TPJudgeMode2Percent.containsKey(m.getKey()) || FPJudgeMode2Percent.containsKey(m.getKey())) {
 				System.out.println(m.getKey() + ": " + m.getValue());
 			}
+		}
+
+		double minTP = Double.MAX_VALUE;
+		double maxFP = 0.0;
+
+		for(int i = 0; i < TPs.size(); i++) {
+			double sum = 0;
+			String[] slices = TPs.get(i).substring(0, TPs.get(i).length()-4).split("_");
+			for(int j = 0; j < slices.length; j++) {
+				if(slices[j].equals("result")) {
+					continue;
+				}
+				sum += judgeMode2Score.get(slices[j]);
+			}
+			System.out.println("Sum of TP File" + i + " is: " + sum);
+			minTP = Math.min(minTP, sum);
 		}
 
 		for(int i = 0; i < FPs.size(); i++) {
@@ -135,21 +160,13 @@ public class AdjustWeight{
 				sum += judgeMode2Score.get(slices[j]);
 			}
 			System.out.println("Sum of FP File" + i + " is: " + sum);
-		}
-
-		for(int i = 0; i < TPs.size(); i++) {
-			double sum = 0;
-			String[] slices = TPs.get(i).substring(0, TPs.get(i).length()-4).split("_");
-			for(int j = 0; j < slices.length; j++) {
-				if(slices[j].equals("result")) {
-					continue;
-				}
-				sum += judgeMode2Score.get(slices[j]);
+			if(sum < minTP) {
+				maxFP = Math.max(maxFP, sum);
 			}
-			System.out.println("Sum of TP File" + i + " is: " + sum);
 		}
 
-
+		double newThreshold = (minTP + maxFP) / 2;
+		System.out.println("newThreshold: " + newThreshold);
 
 		//writeTofile();
 	}
